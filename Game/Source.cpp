@@ -1,16 +1,10 @@
 #include "SFML/Graphics.hpp"
 #include <iostream>
+#include <string>
+#include <sstream>
 #include "Header.h"
 
 
-void Inventory::addtoinv(int a) 
-{
-	
-}
-void Inventory::display()
-{
-
-}
 class Animation
 {
 public:
@@ -27,6 +21,7 @@ public:
 		{
 			frames[0] = { x + 0 * width,y,width,height };
 		}
+
 	}
 	void Apply(sf::Sprite& s) const
 	{
@@ -68,6 +63,7 @@ public:
 		leftWalk(0, 245, 55, 70, 2),
 		stand(60, 145, 40, 85, 0),
 		punch(170, 150, 80, 70, 0),
+		punchLeft(255, 150, 80, 70, 0),
 		dead(20, 325, 70, 55, 0)
 	{
 		//sprite.setTextureRect({ 55,155,55,70 });
@@ -97,9 +93,15 @@ public:
 		leftWalk.Apply(sprite);
 		sprite.setPosition(pos);
 	}
-	void Punch(float dt)
+	void Punch(float dt, bool side)
 	{
-		punch.Apply(sprite);
+		if (side == true) {
+			punch.Apply(sprite);
+		}
+		else
+		{
+			punchLeft.Apply(sprite);
+		}
 		//sprite.setPosition(pos);
 	}
 	void Standing(float dt)
@@ -108,17 +110,24 @@ public:
 		stand.Apply(sprite);
 		sprite.setPosition(pos);
 	}
-	void Knockback(float dt)
+	void Knockback(float dt, bool side)
 	{
-		pos.x = pos.x - 30;
-		sprite.setPosition(pos);
+		if (side == false)
+		{
+			pos.x = pos.x + 30;
+			sprite.setPosition(pos);
+		}
+		else {
+			pos.x = pos.x - 30;
+			sprite.setPosition(pos);
+		}
 	}
 	void Death(float dt)
 	{
-		pos.y = pos.y + 40;
-		dead.Update(dt);
-		dead.Apply(sprite);
-		sprite.setPosition(pos);
+			pos.y = pos.y + 40;
+			dead.Update(dt);
+			dead.Apply(sprite);
+			sprite.setPosition(pos);
 	}
 	sf::Vector2f GetCoords()
 	{
@@ -134,6 +143,7 @@ private:
 	Animation leftWalk;
 	Animation stand;
 	Animation punch;
+	Animation punchLeft;
 	Animation dead;
 };
 class Enemy
@@ -162,25 +172,40 @@ public:
 		if (coords.x > pos.x) {
 			pos.x = pos.x + 2;
 		}
-			
+
 		chasing.Update(dt);
 		chasing.Apply(sprite);
 		sprite.setPosition(pos);
 	}
 	void Death(float dt)
 	{
-		pos.y = pos.y + 50;
-		dead.Update(dt);
-		dead.Apply(sprite);
-		sprite.setPosition(pos);
+				pos.y = pos.y + 50;
+				dead.Update(dt);
+				dead.Apply(sprite);
+				sprite.setPosition(pos);
 	}
 	sf::Vector2f GetCoords()
 	{
 		return sprite.getPosition();
 	}
-	void Knockback(float dt)
+	void Knockback(float dt, bool side)
 	{
-		pos.x = pos.x + 30;
+		if (side == false)
+		{
+			pos.x = pos.x - 30;
+			sprite.setPosition(pos);
+		}
+		else {
+			pos.x = pos.x + 30;
+			sprite.setPosition(pos);
+		}
+	}
+	void Respawn(float dt, float x, float y)
+	{
+		pos.y = y;
+		pos.x = x;
+		chasing.Update(dt);
+		chasing.Apply(sprite);
 		sprite.setPosition(pos);
 	}
 private:
@@ -191,18 +216,40 @@ private:
 	Animation chasing;
 	Animation dead;
 };
+class Score {
+public:
+	sf::Text scoreFin(sf::RenderTarget& rt, int scorenumber) {
+		if (!font.loadFromFile("arial.ttf"))
+		{
+			std::cout << "Font error" << std::endl;
+		}
+		scorenum << scorenumber;
+		scoreText.setString(scorenum.str());
+		scoreText.setCharacterSize(24);
+		scoreText.setFont(font);
+		scoreText.setStyle(sf::Text::Regular);
+		//rt.draw(scoreText);
+		return scoreText;
+	};
+private:
+	sf::Font font;
+	sf::Text scoreText;
+	std::stringstream scorenum;
+};
 
 int main()
 {
 	sf::RenderWindow window(sf::VideoMode(640, 480), "Test");
 	window.setFramerateLimit(60);
-
 	Man dude({330.0f,360.0f});
-	Enemy man({ 660.0f,360.0f});
+	Enemy man({ 550.0f,360.0f });
+	Score score;
+	int scorenumber = 0;
 	bool isDeadEn = false;
 	bool isDead = false;
 	int healthEn = 0;
 	int health = 0;
+	int respawn = 0;
 	while (window.isOpen())
 	{
 		sf::Event e;
@@ -220,6 +267,7 @@ int main()
 			dir.y += 1.0f;
 		}
 		*/
+
 		if (isDead == true) {
 			
 		}
@@ -233,9 +281,9 @@ int main()
 
 			sf::Vector2f coords = dude.GetCoords();
 			sf::Vector2f coordsEn = man.GetCoords();
-			if (isDeadEn != true) {
-				man.Chase(coords, 1.0f / 60.0f);
-			}
+			sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+			//std::cout << "Mouse: " << mousePos.x << " " << mousePos.y << std::endl;
+
 			if (coords.x >= 600 || coords.x <= 0)
 			{
 				if (coords.x >= 600)
@@ -264,9 +312,28 @@ int main()
 			}
 			else {
 				dude.Standing(1.0f / 60.0f);
-				if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
-					int attackcoordsX, attackcoordsY;
-					dude.Punch(1.0f / 60.0f);
+				int attackcoordsX, attackcoordsY;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
+						dude.Punch(1.0f / 60.0f, false);
+						if (coords.x > coordsEn.x)
+						{
+							attackcoordsX = coords.x - coordsEn.x;
+							attackcoordsY = coords.y - coordsEn.y;
+							if (attackcoordsX < 40 && attackcoordsY < 40)
+							{
+								health++;
+								if (health != 3)
+									man.Knockback(1.0f / 60.0f, false);
+								else {
+									isDeadEn = true;
+									man.Death(1.0f / 60.0f);
+									health = 0;
+								}
+							}
+						}
+				}
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
+					dude.Punch(1.0f / 60.0f, true);
 					if (coords.x < coordsEn.x)
 					{
 						attackcoordsX = coordsEn.x - coords.x;
@@ -276,40 +343,77 @@ int main()
 						{
 							health++;
 							if (health != 3)
-								man.Knockback(1.0f / 60.0f);
+								man.Knockback(1.0f / 60.0f, true);
 							else {
 								isDeadEn = true;
 								man.Death(1.0f / 60.0f);
+								health = 0;
+								scorenumber++;
 							}
 						}
 					}
 				}
 			}
-			if (coordsEn.x - coords.x < 10)
+			if (coordsEn.x > coords.x) {
+				if (coordsEn.x - coords.x < 10)
+				{
+					if (isDeadEn != true) {
+						health++;
+						if (health != 3)
+						{
+							dude.Knockback(1.0f / 60.0f, true);
+						}
+						else
+						{
+							isDead = true;
+							dude.Death(1.0f / 60.0f);
+						}
+					}
+				}
+			}
+			else
 			{
-				if (isDeadEn != true) {
-					health++;
-					if (health != 3)
-					{
-						dude.Knockback(1.0f / 60.0f);
+				if (coords.x - coordsEn.x < 10)
+				{
+					if (isDeadEn != true) {
+						health++;
+						if (health != 3)
+						{
+							dude.Knockback(1.0f / 60.0f, true);
+						}
+						else
+						{
+							isDead = true;
+							dude.Death(1.0f / 60.0f);
+						}
 					}
-					else
-					{
-						isDead = true;
-						dude.Death(1.0f / 60.0f);
-					}
+				}
+			}
+			if (isDeadEn != true) {
+				man.Chase(coords, 1.0f / 60.0f);
+			}
+			else
+			{
+				respawn++;
+				if (respawn == 100)
+				{
+					man.Respawn(1.0f / 60.0f, -50.0f, 360.0f);
+					isDeadEn = false;
+					respawn = 0;
 				}
 			}
 
 		}
 			//rendering
 			window.clear(sf::Color::Cyan);
+			//score.Draw(window, scorenumber);
 			dude.Draw(window);
 			man.Draw(window);
 			window.display();
-			//d::cout << "Player: " << coords.x << " " << coords.y << std::endl;
-			//d::cout << "Enemy: " << coordsEn.x << " " << coordsEn.y << std::endl;
-		
+
+			//std::cout << "Player: " << coords.x << " " << coords.y << std::endl;
+			//std::cout << "Enemy: " << coordsEn.x << " " << coordsEn.y << std::endl;
+
 	}
 
 	return 0;
